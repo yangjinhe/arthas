@@ -1,13 +1,14 @@
 ## Arthas
 
-![arthas](site/src/site/sphinx/arthas.png)
+![arthas](site/docs/.vuepress/public/images/arthas.png)
 
-[![Build Status](https://travis-ci.org/alibaba/arthas.svg?branch=master)](https://travis-ci.org/alibaba/arthas)
-[![codecov](https://codecov.io/gh/alibaba/arthas/branch/master/graph/badge.svg)](https://codecov.io/gh/alibaba/arthas)
+[![Build Status](https://github.com/alibaba/arthas/workflows/JavaCI/badge.svg)](https://github.com/alibaba/arthas/actions)
+[![download](https://img.shields.io/github/downloads/alibaba/arthas/total?label=Downloads)](https://github.com/alibaba/arthas/releases/latest)
 [![maven](https://img.shields.io/maven-central/v/com.taobao.arthas/arthas-packaging.svg)](https://search.maven.org/search?q=g:com.taobao.arthas)
 ![license](https://img.shields.io/github/license/alibaba/arthas.svg)
-[![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/alibaba/arthas.svg)](http://isitmaintained.com/project/alibaba/arthas "Average time to resolve an issue")
-[![Percentage of issues still open](http://isitmaintained.com/badge/open/alibaba/arthas.svg)](http://isitmaintained.com/project/alibaba/arthas "Percentage of issues still open")
+[![Average time to resolve an issue](https://isitmaintained.com/badge/resolution/alibaba/arthas.svg)](https://isitmaintained.com/project/alibaba/arthas "Average time to resolve an issue")
+[![Percentage of issues still open](https://isitmaintained.com/badge/open/alibaba/arthas.svg)](https://isitmaintained.com/project/alibaba/arthas "Percentage of issues still open")
+[![Leaderboard](https://img.shields.io/badge/Arthas-Check%20Your%20Contribution-orange)](https://opensource.alibaba.com/contribution_leaderboard/details?projectValue=arthas)
 
 `Arthas` is a Java Diagnostic tool open sourced by Alibaba.
 
@@ -38,13 +39,10 @@ Arthas was built to solve these issues. A developer can troubleshoot your produc
 * Supports command line interactive mode, with auto-complete feature enabled.
 * Supports telnet and websocket, which enables both local and remote diagnostics with command line and browsers.
 * Supports profiler/Flame Graph
-* Supports JDK 6+.
+* Support get objects in the heap that are instances of the specified class. 
+* Supports JDK 8+ in version 4.x, including JDK 17, JDK 21, and JDK 25.
 * Supports Linux/Mac/Windows.
 
-
-### [Online Tutorials(Recommended)](https://arthas.aliyun.com/doc/arthas-tutorials.html?language=en)
-
-* [Usages](tutorials/katacoda/README.md#online-tutorial-usages)
 
 ### Quick start
 
@@ -78,7 +76,6 @@ You can enter its interactive interface by executing `as.sh`, or execute `as.sh 
 
 ### Documentation
 
-* [Online Tutorials(Recommended)](https://arthas.aliyun.com/doc/arthas-tutorials.html?language=en)
 * [User manual](https://arthas.aliyun.com/doc/en)
 * [Installation](https://arthas.aliyun.com/doc/en/install-detail.html)
 * [Download](https://arthas.aliyun.com/doc/en/download.html)
@@ -100,7 +97,7 @@ You can enter its interactive interface by executing `as.sh`, or execute `as.sh 
 
 * https://arthas.aliyun.com/doc/en/dashboard
 
-![dashboard](site/src/site/sphinx/_static/dashboard.png)
+![dashboard](site/docs/.vuepress/public/images/dashboard.png)
 
 #### Thread
 
@@ -182,18 +179,18 @@ public interface Servlet {
 Memory compiler, compiles `.java` files into `.class` files in memory.
 
 ```bash
-mc /tmp/Test.java
+$ mc /tmp/Test.java
 ```
 
-#### redefine
+#### retransform
 
-* https://arthas.aliyun.com/doc/en/redefine
+* https://arthas.aliyun.com/doc/en/retransform
 
-Load the external `*.class` files to re-define the loaded classes in JVM.
+Load the external `*.class` files to retransform/hotswap the loaded classes in JVM.
 
 ```bash
-redefine /tmp/Test.class
-redefine -c 327a647b /tmp/Test.class /tmp/Test\$Inner.class
+retransform /tmp/Test.class
+retransform -c 327a647b /tmp/Test.class /tmp/Test\$Inner.class
 ```
 
 #### sc
@@ -232,6 +229,29 @@ $ sc -d org.springframework.web.context.support.XmlWebApplicationContext
                          +-sun.misc.Launcher$ExtClassLoader@1ddf84b8
  classLoaderHash   25131501
 
+```
+
+
+#### vmtool
+
+* https://arthas.aliyun.com/doc/en/vmtool
+
+Get objects in the heap that are instances of the specified class.
+
+```bash
+$ vmtool --action getInstances --className java.lang.String --limit 10
+@String[][
+    @String[com/taobao/arthas/core/shell/session/Session],
+    @String[com.taobao.arthas.core.shell.session.Session],
+    @String[com/taobao/arthas/core/shell/session/Session],
+    @String[com/taobao/arthas/core/shell/session/Session],
+    @String[com/taobao/arthas/core/shell/session/Session.class],
+    @String[com/taobao/arthas/core/shell/session/Session.class],
+    @String[com/taobao/arthas/core/shell/session/Session.class],
+    @String[com/],
+    @String[java/util/concurrent/ConcurrentHashMap$ValueIterator],
+    @String[java/util/concurrent/locks/LockSupport],
+]
 ```
 
 #### stack
@@ -277,7 +297,7 @@ ts=2018-09-18 10:11:45;thread_name=http-bio-8080-exec-10;id=d9;is_daemon=true;pr
 
 See what is slowing down your method invocation with trace command:
 
-![trace](site/src/site/sphinx/_static/trace.png)
+![trace](site/docs/.vuepress/public/images/trace.png)
 
 #### Watch
 
@@ -299,7 +319,7 @@ ts=2018-09-18 10:26:28;result=@ArrayList[
 
 * https://arthas.aliyun.com/doc/en/monitor
 
-Monitor a specific method invocation statistics, including total number of invocations, average response time, success rate, and every 5 seconds:
+Monitor a specific method invocation statistics, including the total number of invocations, average response time, success rate, and every 5 seconds:
 
 ```bash
 $ monitor -c 5 org.apache.dubbo.demo.provider.DemoServiceImpl sayHello
@@ -364,7 +384,7 @@ $ classloader
 
 * https://arthas.aliyun.com/doc/en/web-console
 
-![web console](site/src/site/sphinx/_static/web-console-local.png)
+![web console](site/docs/.vuepress/public/images/web-console-local.png)
 
 
 #### Profiler/FlameGraph
@@ -378,13 +398,13 @@ Started [cpu] profiling
 
 ```
 $ profiler stop
-profiler output file: /tmp/demo/arthas-output/20191125-135546.svg
+profiler output file: /tmp/demo/arthas-output/20211207-111550.html
 OK
 ```
 
 View profiler results under arthas-output via browser:
 
-![](site/src/site/sphinx/_static/arthas-output-svg.jpg)
+![](site/docs/.vuepress/public/images/arthas-output-svg.jpg)
 
 #### Arthas Spring Boot Starter
 
@@ -407,6 +427,10 @@ Welcome to register the company name in this issue: https://github.com/alibaba/a
 ![vipkid](static/vipkid.png)
 ![百度凤巢](static/baidufengchao.png)
 ![有赞](static/youzan.png)
+![科大讯飞](static/iflytek.png)
+![智联招聘](static/zhaopin.png)
+![达美盛](static/dms.png)
+
 
 ### Derivative Projects
 

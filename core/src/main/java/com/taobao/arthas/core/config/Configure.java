@@ -10,7 +10,11 @@ import java.util.Map;
 import static java.lang.reflect.Modifier.isStatic;
 
 /**
- * 配置类
+ * <pre>
+ * 配置类。
+ * 注意本类里的所有字段不能有默认值，否则会出现配置混乱。
+ * 在 com.taobao.arthas.core.Arthas#attach 里会调用 Configure#toStrig
+ * <pre>
  *
  * @author vlinux
  * @author hengyunabc 2018-11-12
@@ -24,6 +28,11 @@ public class Configure {
     private Long javaPid;
     private String arthasCore;
     private String arthasAgent;
+
+    /**
+     * attach 进程和目标 JVM 是否处于不同的 mount namespace，仅用于传递内部 attach 元数据。
+     */
+    private Boolean crossMountNamespace;
 
     private String tunnelServer;
     private String agentId;
@@ -59,6 +68,31 @@ public class Configure {
      * @see ShellServerOptions#DEFAULT_SESSION_TIMEOUT
      */
     private Long sessionTimeout;
+
+    /**
+     * disabled commands
+     */
+    private String disabledCommands;
+
+    /**
+     * 外部 command jar 位置，支持 jar 路径或目录路径，多个值用英文 , 分隔
+     */
+    private String commandLocations;
+
+    /**
+     * 本地连接不需要鉴权，即使配置了password。arthas.properties 里默认为true
+     */
+    private Boolean localConnectionNonAuth;
+
+    /**
+     * MCP (Model Context Protocol) endpoint path
+     */
+    private String mcpEndpoint;
+
+    /**
+     * MCP Server Protocol: STREAMABLE or STATELESS
+     */
+    private String mcpProtocol;
 
     public String getIp() {
         return ip;
@@ -106,6 +140,14 @@ public class Configure {
 
     public void setArthasCore(String arthasCore) {
         this.arthasCore = arthasCore;
+    }
+
+    public boolean isCrossMountNamespace() {
+        return crossMountNamespace != null && crossMountNamespace;
+    }
+
+    public void setCrossMountNamespace(boolean crossMountNamespace) {
+        this.crossMountNamespace = crossMountNamespace;
     }
 
     public Long getSessionTimeout() {
@@ -178,6 +220,46 @@ public class Configure {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getDisabledCommands() {
+        return disabledCommands;
+    }
+
+    public void setDisabledCommands(String disabledCommands) {
+        this.disabledCommands = disabledCommands;
+    }
+
+    public String getCommandLocations() {
+        return commandLocations;
+    }
+
+    public void setCommandLocations(String commandLocations) {
+        this.commandLocations = commandLocations;
+    }
+
+    public boolean isLocalConnectionNonAuth() {
+        return localConnectionNonAuth != null && localConnectionNonAuth;
+    }
+
+    public void setLocalConnectionNonAuth(boolean localConnectionNonAuth) {
+        this.localConnectionNonAuth = localConnectionNonAuth;
+    }
+
+    public String getMcpEndpoint() {
+        return mcpEndpoint;
+    }
+
+    public void setMcpEndpoint(String mcpEndpoint) {
+        this.mcpEndpoint = mcpEndpoint;
+    }
+
+    public String getMcpProtocol() {
+        return mcpProtocol;
+    }
+
+    public void setMcpProtocol(String mcpProtocol) {
+        this.mcpProtocol = mcpProtocol;
     }
 
     /**

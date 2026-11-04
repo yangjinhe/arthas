@@ -4,11 +4,12 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -17,7 +18,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.net.telnet.InvalidTelnetOptionException;
+import org.apache.commons.net.telnet.SimpleOptionHandler;
 import org.apache.commons.net.telnet.TelnetClient;
+import org.apache.commons.net.telnet.TelnetOption;
 import org.apache.commons.net.telnet.TelnetOptionHandler;
 import org.apache.commons.net.telnet.WindowSizeOptionHandler;
 
@@ -84,6 +87,7 @@ public class TelnetConsole {
 
     private Integer width = null;
     private Integer height = null;
+    private boolean quiet = false;
 
     @Argument(argName = "target-ip", index = 0, required = false)
     @Description("Target ip")
@@ -133,6 +137,12 @@ public class TelnetConsole {
         this.height = height;
     }
 
+    @Option(longName = "quiet", flag = true)
+    @Description("Suppress connection welcome output")
+    public void setQuiet(boolean quiet) {
+        this.quiet = quiet;
+    }
+
     public TelnetConsole() {
     }
 
@@ -140,7 +150,7 @@ public class TelnetConsole {
         List<String> list = new ArrayList<String>();
         BufferedReader br = null;
         try {
-            br = new BufferedReader(new FileReader(batchFile));
+            br = Files.newBufferedReader(batchFile.toPath(), StandardCharsets.UTF_8);
             String line = br.readLine();
             while (line != null) {
                 list.add(line);
@@ -195,15 +205,12 @@ public class TelnetConsole {
      * arthas client 主函数
      * 注意： process()函数提供给arthas-boot使用，内部不能调用System.exit()结束进程的方法
      *
-     * @param telnetConsole
-     * @param cli
      * @param args
      * @param eotEventCallback Ctrl+D signals an End of Transmission (EOT) event
      * @return status code
      * @throws IOException
-     * @throws InterruptedException
      */
-    public static int process(String[] args, ActionListener eotEventCallback) throws IOException, InterruptedException {
+    public static int process(String[] args, ActionListener eotEventCallback) throws IOException {
         // support mingw/cygw jline color
         if (OSUtils.isCygwinOrMinGW()) {
             System.setProperty("jline.terminal", System.getProperty("jline.terminal", "jline.UnixTerminal"));
@@ -218,7 +225,7 @@ public class TelnetConsole {
 
         if (telnetConsole.isHelp()) {
             System.out.println(usage(cli));
-            return STATUS_ERROR;
+            return STATUS_OK;
         }
 
         // Try to read cmds
@@ -276,8 +283,18 @@ public class TelnetConsole {
                 }
             }
 
-            final TelnetClient telnet = new TelnetClient();
+            final TelnetClient telnet = telnetConsole.isQuiet()
+                    ? new TelnetClient("arthas-agent")
+                    : new TelnetClient();
             telnet.setConnectTimeout(DEFAULT_CONNECTION_TIMEOUT);
+
+            // Telnet BINARY 让 terminal 的 UTF-8 字节在两个方向都保持完整。
+            TelnetOptionHandler binaryOpt = new SimpleOptionHandler(TelnetOption.BINARY, true, true, true, true);
+            try {
+                telnet.addOptionHandler(binaryOpt);
+            } catch (InvalidTelnetOptionException e) {
+                // ignore
+            }
 
             // send init terminal size
             TelnetOptionHandler sizeOpt = new WindowSizeOptionHandler(width, height, true, true, false, false);
@@ -288,7 +305,7 @@ public class TelnetConsole {
             }
 
             // ctrl + c event callback
-            consoleReader.getKeys().bind(new Character((char) CTRL_C).toString(), new ActionListener() {
+            consoleReader.getKeys().bind(Character.toString((char) CTRL_C), new ActionListener() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     try {
@@ -303,7 +320,7 @@ public class TelnetConsole {
             });
 
             // ctrl + d event call back
-            consoleReader.getKeys().bind(new Character(KeyMap.CTRL_D).toString(), eotEventCallback);
+            consoleReader.getKeys().bind(Character.toString(KeyMap.CTRL_D), eotEventCallback);
 
             try {
                 telnet.connect(telnetConsole.getTargetIp(), telnetConsole.getPort());
@@ -361,7 +378,7 @@ public class TelnetConsole {
             public void run() {
                 try {
                     StringBuilder line = new StringBuilder();
-                    BufferedReader in = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"));
+                    BufferedReader in = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
                     int b = -1;
                     while (true) {
                         b = in.read();
@@ -371,8 +388,8 @@ public class TelnetConsole {
                         line.appendCodePoint(b);
 
                         // 检查到有 [arthas@ 时，意味着可以执行下一个命令了
-                        int index = line.indexOf(PROMPT);
-                        if (index > 0) {
+                        int index = findPromptAtLineStart(line);
+                        if (index >= 0) {
                             line.delete(0, index + PROMPT.length());
                             receviedPromptQueue.put("");
                         }
@@ -400,17 +417,29 @@ public class TelnetConsole {
                 }
             }
             // send command to server
-            outputStream.write((command + " | plaintext\n").getBytes());
+            outputStream.write((command + " | plaintext\n").getBytes(StandardCharsets.UTF_8));
             outputStream.flush();
         }
 
         // 读到最后一个命令执行后的 prompt ，可以直接发 quit命令了。
         receviedPromptQueue.take();
-        outputStream.write("quit\n".getBytes());
+        outputStream.write("quit\n".getBytes(StandardCharsets.UTF_8));
         outputStream.flush();
         System.out.println();
 
         return STATUS_OK;
+    }
+
+    private static int findPromptAtLineStart(StringBuilder output) {
+        int fromIndex = 0;
+        int index;
+        while ((index = output.indexOf(PROMPT, fromIndex)) >= 0) {
+            if (index == 0 || output.charAt(index - 1) == '\n') {
+                return index;
+            }
+            fromIndex = index + PROMPT.length();
+        }
+        return -1;
     }
 
     private static String usage(CLI cli) {
@@ -447,6 +476,10 @@ public class TelnetConsole {
 
     public Integer getheight() {
         return height;
+    }
+
+    public boolean isQuiet() {
+        return quiet;
     }
 
     public boolean isHelp() {

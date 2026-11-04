@@ -2,12 +2,13 @@ package com.taobao.arthas.core.advisor;
 
 import java.arthas.SpyAPI.AbstractSpy;
 import java.util.List;
-import java.util.regex.Pattern;
 
 import com.alibaba.arthas.deps.org.slf4j.Logger;
 import com.alibaba.arthas.deps.org.slf4j.LoggerFactory;
 import com.taobao.arthas.core.shell.system.ExecStatus;
+import com.taobao.arthas.core.shell.system.Process;
 import com.taobao.arthas.core.shell.system.ProcessAware;
+import com.taobao.arthas.core.util.StringUtils;
 
 /**
  * <pre>
@@ -27,7 +28,7 @@ public class SpyImpl extends AbstractSpy {
     public void atEnter(Class<?> clazz, String methodInfo, Object target, Object[] args) {
         ClassLoader classLoader = clazz.getClassLoader();
 
-        String[] info = splitMethodInfo(methodInfo);
+        String[] info = StringUtils.splitMethodInfo(methodInfo);
         String methodName = info[0];
         String methodDesc = info[1];
         // TODO listener 只用查一次，放到 thread local里保存起来就可以了！
@@ -52,7 +53,7 @@ public class SpyImpl extends AbstractSpy {
     public void atExit(Class<?> clazz, String methodInfo, Object target, Object[] args, Object returnObject) {
         ClassLoader classLoader = clazz.getClassLoader();
 
-        String[] info = splitMethodInfo(methodInfo);
+        String[] info = StringUtils.splitMethodInfo(methodInfo);
         String methodName = info[0];
         String methodDesc = info[1];
 
@@ -76,7 +77,7 @@ public class SpyImpl extends AbstractSpy {
     public void atExceptionExit(Class<?> clazz, String methodInfo, Object target, Object[] args, Throwable throwable) {
         ClassLoader classLoader = clazz.getClassLoader();
 
-        String[] info = splitMethodInfo(methodInfo);
+        String[] info = StringUtils.splitMethodInfo(methodInfo);
         String methodName = info[0];
         String methodDesc = info[1];
 
@@ -99,7 +100,7 @@ public class SpyImpl extends AbstractSpy {
     @Override
     public void atBeforeInvoke(Class<?> clazz, String invokeInfo, Object target) {
         ClassLoader classLoader = clazz.getClassLoader();
-        String[] info = splitInvokeInfo(invokeInfo);
+        String[] info = StringUtils.splitInvokeInfo(invokeInfo);
         String owner = info[0];
         String methodName = info[1];
         String methodDesc = info[2];
@@ -125,7 +126,7 @@ public class SpyImpl extends AbstractSpy {
     @Override
     public void atAfterInvoke(Class<?> clazz, String invokeInfo, Object target) {
         ClassLoader classLoader = clazz.getClassLoader();
-        String[] info = splitInvokeInfo(invokeInfo);
+        String[] info = StringUtils.splitInvokeInfo(invokeInfo);
         String owner = info[0];
         String methodName = info[1];
         String methodDesc = info[2];
@@ -151,7 +152,7 @@ public class SpyImpl extends AbstractSpy {
     @Override
     public void atInvokeException(Class<?> clazz, String invokeInfo, Object target, Throwable throwable) {
         ClassLoader classLoader = clazz.getClassLoader();
-        String[] info = splitInvokeInfo(invokeInfo);
+        String[] info = StringUtils.splitInvokeInfo(invokeInfo);
         String owner = info[0];
         String methodName = info[1];
         String methodDesc = info[2];
@@ -174,18 +175,40 @@ public class SpyImpl extends AbstractSpy {
         }
     }
 
-    private String[] splitMethodInfo(String methodInfo) {
-        return methodInfo.split(Pattern.quote("|"));
+    @Override
+    public void atLine(Class<?> clazz, String methodInfo, int lineNumber, Object target, Object[] args,
+            String[] argNames, Object[] localVars, String[] localVarNames) {
+        ClassLoader classLoader = clazz.getClassLoader();
+
+        String[] info = StringUtils.splitMethodInfo(methodInfo);
+        String methodName = info[0];
+        String methodDesc = info[1];
+
+        List<AdviceListener> listeners = AdviceListenerManager.queryLineAdviceListeners(classLoader, clazz.getName(),
+                methodName, methodDesc, lineNumber);
+        if (listeners != null) {
+            for (AdviceListener adviceListener : listeners) {
+                try {
+                    if (skipAdviceListener(adviceListener)) {
+                        continue;
+                    }
+                    adviceListener.atLine(clazz, methodName, methodDesc, target, args, lineNumber, argNames,
+                            localVars, localVarNames);
+                } catch (Throwable e) {
+                    logger.error("class: {}, methodInfo: {}, lineNumber: {}", clazz.getName(), methodInfo, lineNumber, e);
+                }
+            }
+        }
     }
 
-    private String[] splitInvokeInfo(String invokeInfo) {
-        return invokeInfo.split(Pattern.quote("|"));
-    }
-
-    private boolean skipAdviceListener(AdviceListener adviceListener) {
+    private static boolean skipAdviceListener(AdviceListener adviceListener) {
         if (adviceListener instanceof ProcessAware) {
             ProcessAware processAware = (ProcessAware) adviceListener;
-            ExecStatus status = processAware.getProcess().status();
+            Process process = processAware.getProcess();
+            if (process == null) {
+                return true;
+            }
+            ExecStatus status = process.status();
             if (status.equals(ExecStatus.TERMINATED) || status.equals(ExecStatus.STOPPED)) {
                 return true;
             }

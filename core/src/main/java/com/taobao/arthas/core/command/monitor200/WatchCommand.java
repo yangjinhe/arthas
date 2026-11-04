@@ -9,7 +9,9 @@ import com.taobao.arthas.core.shell.cli.Completion;
 import com.taobao.arthas.core.shell.cli.CompletionUtils;
 import com.taobao.arthas.core.shell.command.CommandProcess;
 import com.taobao.arthas.core.util.SearchUtils;
+import com.taobao.arthas.core.util.StringUtils;
 import com.taobao.arthas.core.util.matcher.Matcher;
+import com.taobao.arthas.core.view.ObjectView;
 import com.taobao.middleware.cli.annotations.Argument;
 import com.taobao.middleware.cli.annotations.DefaultValue;
 import com.taobao.middleware.cli.annotations.Description;
@@ -20,15 +22,15 @@ import com.taobao.middleware.cli.annotations.Summary;
 @Name("watch")
 @Summary("Display the input/output parameter, return object, and thrown exception of specified method invocation")
 @Description(Constants.EXPRESS_DESCRIPTION + "\nExamples:\n" +
-        "  watch -b org.apache.commons.lang.StringUtils isBlank params\n" +
-        "  watch -f org.apache.commons.lang.StringUtils isBlank returnObj\n" +
-        "  watch org.apache.commons.lang.StringUtils isBlank '{params, target, returnObj}' -x 2\n" +
-        "  watch -bf *StringUtils isBlank params\n" +
-        "  watch *StringUtils isBlank params[0]\n" +
+        "  watch org.apache.commons.lang.StringUtils isBlank\n" +
+        "  watch org.apache.commons.lang.StringUtils isBlank '{params, target, returnObj, throwExp}' -x 2\n" +
         "  watch *StringUtils isBlank params[0] params[0].length==1\n" +
         "  watch *StringUtils isBlank params '#cost>100'\n" +
+        "  watch -f *StringUtils isBlank params\n" +
+        "  watch *StringUtils isBlank params[0]\n" +
         "  watch -E -b org\\.apache\\.commons\\.lang\\.StringUtils isBlank params[0]\n" +
         "  watch javax.servlet.Filter * --exclude-class-pattern com.demo.TestFilter\n" +
+        "  watch OuterClass$InnerClass\n" +
         Constants.WIKI + Constants.WIKI_HOME + "watch")
 public class WatchCommand extends EnhancerCommand {
 
@@ -41,14 +43,14 @@ public class WatchCommand extends EnhancerCommand {
     private boolean isException = false;
     private boolean isSuccess = false;
     private Integer expand = 1;
-    private Integer sizeLimit = 10 * 1024 * 1024;
+    private Integer sizeLimit;
     private boolean isRegEx = false;
     private int numberOfLimit = 100;
     
     @Argument(index = 0, argName = "class-pattern")
     @Description("The full qualified class name you want to watch")
     public void setClassPattern(String classPattern) {
-        this.classPattern = classPattern;
+        this.classPattern = StringUtils.normalizeClassName(classPattern);
     }
 
     @Argument(index = 1, argName = "method-pattern")
@@ -59,7 +61,7 @@ public class WatchCommand extends EnhancerCommand {
 
     @Argument(index = 2, argName = "express", required = false)
     @DefaultValue("{params, target, returnObj}")
-    @Description("the content you want to watch, written by ognl.\n" + Constants.EXPRESS_EXAMPLES)
+    @Description("The content you want to watch, written by ognl. Default value is '{params, target, returnObj}'\n" + Constants.EXPRESS_EXAMPLES)
     public void setExpress(String express) {
         this.express = express;
     }
@@ -95,13 +97,13 @@ public class WatchCommand extends EnhancerCommand {
     }
 
     @Option(shortName = "M", longName = "sizeLimit")
-    @Description("Upper size limit in bytes for the result (10 * 1024 * 1024 by default)")
+    @Description("Upper size limit in bytes for the result (must be greater than 0, default value comes from options object-size-limit)")
     public void setSizeLimit(Integer sizeLimit) {
         this.sizeLimit = sizeLimit;
     }
 
     @Option(shortName = "x", longName = "expand")
-    @Description("Expand level of object (1 by default)")
+    @Description("Expand level of object (1 by default), the max value is " + ObjectView.MAX_DEEP)
     public void setExpand(Integer expand) {
         this.expand = expand;
     }
@@ -116,6 +118,13 @@ public class WatchCommand extends EnhancerCommand {
     @Description("Threshold of execution times")
     public void setNumberOfLimit(int numberOfLimit) {
         this.numberOfLimit = numberOfLimit;
+    }
+
+    @Override
+    @Option(shortName = "c", longName = "classloader")
+    @Description("The hash code of the special class's classLoader")
+    public void setHashCode(String hashCode) {
+        super.setHashCode(hashCode);
     }
 
     public String getClassPattern() {
@@ -191,6 +200,16 @@ public class WatchCommand extends EnhancerCommand {
     }
 
     @Override
+    public void process(CommandProcess process) {
+        String validateError = validateSizeLimit(sizeLimit);
+        if (validateError != null) {
+            process.end(-1, validateError);
+            return;
+        }
+        super.process(process);
+    }
+
+    @Override
     protected AdviceListener getAdviceListener(CommandProcess process) {
         return new WatchAdviceListener(this, process, GlobalOptions.verbose || this.verbose);
     }
@@ -198,5 +217,12 @@ public class WatchCommand extends EnhancerCommand {
     @Override
     protected void completeArgument3(Completion completion) {
         CompletionUtils.complete(completion, Arrays.asList(EXPRESS_EXAMPLES));
+    }
+
+    static String validateSizeLimit(Integer sizeLimit) {
+        if (sizeLimit != null && sizeLimit.intValue() <= 0) {
+            return "sizeLimit must be greater than 0.";
+        }
+        return null;
     }
 }
